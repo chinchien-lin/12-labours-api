@@ -19,6 +19,9 @@ import mimetypes
 import re
 import time
 
+import psycopg2
+import json
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -425,6 +428,131 @@ async def get_gen3_graphql_query(
         headers={"X-One-Off": authority["one_off_token"]},
     )
 
+@app.post(
+    "/postgres/pagination",
+    tags=["postgres"],
+    summary="Display datasets",
+    responses=pagination_responses,
+)
+# async def get_gen3_graphql_pagination(
+async def get_postgres_pagination(
+    numberPerPage: GraphQLPaginationItem,
+    # search: str = "",
+):
+    conn, cur = get_postgres_connection()
+    datasets = get_postgres_datasets(cur)
+
+    print(datasets)
+
+    items = []
+    for dataset in datasets:
+        dataset_id = dataset.get("dataset_id")
+        dataset_uuid = dataset.get("dataset_uuid")
+        dataset_name = dataset.get("dataset_name")
+
+        preview_link = f"/data/preview/{dataset_name}/"
+        # preview_link = f"/data/preview/{dataset_id}/"
+
+        dataset_format = {
+            "data_url_suffix": f"/data/browser/dataset/{dataset_id}?datasetTab=abstract",
+            "source_url_middle": f"/data/download/{dataset_id}/",
+            "contributors": PF._handle_contributor(
+                dataset.get("contributor_name")
+            ),
+            "keywords": dataset.get("keywords"),
+            "numberSamples": dataset.get("number_of_samples"),
+            "numberSubjects": dataset.get("number_of_subjects"),
+            "name": dataset.get("title"),
+            "datasetId": dataset_id,
+            "organs": dataset.get("study_organ_system"),
+            # "species": PF._handle_species(_["cases"]),
+            # "plots": PF._handle_manifest(dataset_uuid, preview_link, _["plots"]),
+            # "scaffoldViews": PF._handle_manifest(
+            #     dataset_uuid, preview_link, _["scaffoldViews"], True
+            # ),
+            # "scaffolds": PF._handle_manifest(dataset_uuid, preview_link, _["scaffolds"]),
+            "thumbnails": get_thumbnails(preview_link),
+            # "thumbnails": PF._handle_manifest(
+            #     dataset_name,
+            #     preview_link,
+            #     PF._handle_thumbnail(dataset["thumbnails"]),
+            #     True,
+            # ),
+            # "mris": PF._handle_manifest(dataset_uuid, preview_link, _["mris"]),
+            # "dicomImages": PF._handle_manifest(
+            #     dataset_uuid, preview_link, _["dicomImages"]
+            # ),
+            "category": dataset.get("category"),
+            "detailsReady": True
+        }
+        items.append(dataset_format)
+
+
+    data_count = len(items)  # number of datasets
+    return JSONResponse(
+        content={
+            "items": items,
+            "numberPerPage": 1000,
+            "total": data_count,
+        },
+    )
+
+def get_thumbnails(preview_link):
+    thumbnails_url = preview_link + "primary/thumbnail_0.jpg"
+    thumbnails = [
+        {"image_url": thumbnails_url}
+    ]
+    return thumbnails
+
+def get_postgres_connection():
+    conn = psycopg2.connect(
+        host="localhost",
+        port="5432",
+        database="digitaltwins",
+        user="postgres",
+        password="postgres")
+    cur = conn.cursor()
+
+    return conn, cur
+def get_postgres_datasets(cur):
+    # sql = "SELECT * FROM dataset"
+    # sql = ("SELECT * FROM dataset "
+    #        "LEFT JOIN dataset_description ON dataset.dataset_uuid = dataset_description.dataset_uuid")
+    # where project = XXX
+    # RIGHT JOIN project ON dataset.project_uuid = project.project_uuid;
+    # a611bd1a-5f4d-11ef-917d-484d7e9beb16
+    # 9fce33d4-5f4d-11ef-917d-484d7e9beb16
+    sql = ("SELECT * FROM dataset "
+           "LEFT JOIN dataset_description ON dataset.dataset_uuid = dataset_description.dataset_uuid "
+           "RIGHT JOIN project ON dataset.project_uuid = project.project_uuid "
+           "WHERE project.project_uuid IN ('a611bd1a-5f4d-11ef-917d-484d7e9beb16', '9fce33d4-5f4d-11ef-917d-484d7e9beb16')")
+
+
+    cur.execute(sql)
+    resp = cur.fetchall()
+    datasets = resp
+
+    column_names = []
+
+    # Iterate over the cursor description to extract column names
+    for desc in cur.description:
+        column_name = desc[0]  # Get the column name from the description tuple
+        column_names.append(column_name)  # Add the column name to the list
+
+    datasets_formated = []
+    for dataset in datasets:
+        row_dict = {}
+        for i in range(len(dataset)):
+            column_name = column_names[i]
+            row_value = dataset[i]
+            # Add the column name and value to the dictionary
+            row_dict[column_name] = row_value
+        # Convert the dictionary to a JSON object and add it to the list
+        # datasets_formated.append(json.dumps(row_dict))
+        datasets_formated.append(row_dict)
+
+    return datasets_formated
+
 
 @app.post(
     "/graphql/pagination",
@@ -649,19 +777,19 @@ async def get_irods_data_file(
     """
     chunk_size = 1024 * 1024 * 1024
 
-    if connection["gen3"] is None or connection["irods"] is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Please check the service (Gen3/iRODS) status",
-        )
-    if action not in ["preview", "download"]:
-        raise HTTPException(
-            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-            detail=f"The action ({action}) is not provided in this API",
-        )
-
-    access_scope = A.handle_get_one_off_authority(token)
-    _handle_irods_access(f"/data/{action}", filepath, access_scope)
+    # if connection["gen3"] is None or connection["irods"] is None:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #         detail="Please check the service (Gen3/iRODS) status",
+    #     )
+    # if action not in ["preview", "download"]:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+    #         detail=f"The action ({action}) is not provided in this API",
+    #     )
+    #
+    # access_scope = A.handle_get_one_off_authority(token)
+    # _handle_irods_access(f"/data/{action}", filepath, access_scope)
 
     try:
         file = connection["irods"].data_objects.get(

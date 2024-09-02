@@ -154,7 +154,7 @@ class PaginationFormatter:
         Handler for updating the contributor format
         """
         result = []
-        if data == []:
+        if data == [] or data is None:
             return result
         for _ in data:
             contributor = {"name": _}
