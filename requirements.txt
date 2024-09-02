@@ -8,3 +8,12 @@ python-dotenv==0.20.0
 python-irodsclient==1.1.8
 sgqlc==16.3
 uvicorn==0.18.2
+
+# issue: ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject
+# solution: answer #1: https://stackoverflow.com/questions/78634235/numpy-dtype-size-changed-may-indicate-binary-incompatibility-expected-96-from
+numpy==1.26.4
+
+psycopg2
+# if getting ERROR: ERROR: Failed to build installable wheels for some pyproject.toml based projects (psycopg2)
+# then
+# sudo apt-get install libpq-dev python3-dev
